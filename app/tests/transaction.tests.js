@@ -10,7 +10,7 @@ describe('Transaction Model Unit Tests:', () => {
     beforeEach((done) => {
         transaction = new Transaction({
             trans_id: '123',
-            user_id: 'user1',
+            user_id: 'dberg',
             name: 'Amazon 181015',
             amount: 12.99,
             date: "2018-10-15T08:00:00Z",
@@ -26,16 +26,38 @@ describe('Transaction Model Unit Tests:', () => {
                 expect(err).to.not.exist;
             });
         });
+
         it('Should not save a transaction with no trans_id', () => {
             transaction.trans_id = '';
             transaction.save((err) => {
                 expect(err).to.exist;
-            })
-        })
+            });
+        });
+
+        it('Should not save a transaction with no user_id', () => {
+            transaction.user_id = '';
+            transaction.save((err) => {
+                expect(err).to.exist;
+            });
+        });
+
+        it('Should not save a transaction with no name', () => {
+            transaction.name = '';
+            transaction.save((err) => {
+                expect(err).to.exist;
+            });
+        });
+
+        it('Should not save a transaction with no amount', () => {
+            transaction.amount = '';
+            transaction.save((err) => {
+                expect(err).to.exist;
+            });
+        });
     });
 
     afterEach((done) => {
-        Transaction.remove(() => {
+        Transaction.deleteMany({}, () => {
             done();
         });
     });
