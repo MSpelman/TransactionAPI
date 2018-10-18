@@ -98,6 +98,35 @@ describe('Transactions Controller Unit Tests:', () => {
                 });
         });
 
+        it('Should update exisiting transaction (single txn updated)', (done) => {
+            request('http://localhost:1984').post('/')
+                .set('Accept', 'application/json')
+                .set('Content-Type', 'application/json')
+                .send([
+                    {
+                        "trans_id":"125",
+                        "user_id":loggedInUser._id,
+                        "name":"Amazon 2",
+                        "amount":"12.99",
+                        "date":TODAY
+                    }
+                ])
+                .expect('Content-Type', /json/)
+                .expect(200)
+                .end((err, res) => {
+                    if (err) return done(err);
+                    expect(res.body).to.be.a('array');
+                    expect(res.body).has.lengthOf(1);
+                    expect(res.body[0]).to.have.property('name').that.equals('Amazon 2');
+                    var txns = res.body[0].transactions;
+                    expect(txns).to.be.a('array');
+                    expect(txns).has.lengthOf(3);
+                    expect(txns[0]).to.have.property('trans_id').that.equals('125');
+                    expect(txns[0]).to.have.property('name').that.equals('Amazon 2');
+                    done();
+                });
+        });
+
         it('Should return multiple recurring transactions (multiple txns upserted)', (done) => {
             request('http://localhost:1984').post('/')
                 .set('Accept', 'application/json')
