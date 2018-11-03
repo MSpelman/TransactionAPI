@@ -56,35 +56,24 @@ const similarDates = function(group, txnDate) {
         // this does not take things like DST into consideration, but okay since dealing with range
         var difDays = Math.floor((group.last_date.getTime() - txnDate.getTime()) / DAY_TIME);
         // need to check all possible recurrences
+        var nextTime;
         switch (difDays) {
             // weekly
             case 5: case 6: case 7: case 8: case 9:
             group.recurrence = "WEEK";
-            var nextTime = group.last_date.getTime() + (7 * DAY_TIME);
-            var nextDate = new Date();
-            nextDate.setTime(nextTime);
-            group.next_date = nextDate.toISOString();
-            similar = true;
+            nextTime = group.last_date.getTime() + (7 * DAY_TIME);
             break;
 
             // bi-weekly (some people get paid bi-weekly)
             case 12: case 13: case 14: case 15: case 16:
             group.recurrence = "BIWK";
-            var nextTime = group.last_date.getTime() + (14 * DAY_TIME);
-            var nextDate = new Date();
-            nextDate.setTime(nextTime);
-            group.next_date = nextDate.toISOString();
-            similar = true;
+            nextTime = group.last_date.getTime() + (14 * DAY_TIME);
             break;
 
             // monthly (allow a bigger range because of things like February)
             case 26: case 27: case 28: case 29: case 30: case 31: case 32: case 33: case 34:
             group.recurrence = "MONT";
-            var nextTime = group.last_date.getTime() + (30 * DAY_TIME);
-            var nextDate = new Date();
-            nextDate.setTime(nextTime);
-            group.next_date = nextDate.toISOString();
-            similar = true;
+            nextTime = group.last_date.getTime() + (30 * DAY_TIME);
             break;
 
             // can add in checks for things like bi-monthly, quarterly, etc.
@@ -92,22 +81,21 @@ const similarDates = function(group, txnDate) {
             // semi-annual (many times things like car insurance is billed every 6 months)
             case 179: case 180: case 181: case 182: case 183: case 184: case 185: case 186: case 187:
             group.recurrence = "SEMI";
-            var nextTime = group.last_date.getTime() + (183 * DAY_TIME);
-            var nextDate = new Date();
-            nextDate.setTime(nextTime);
-            group.next_date = nextDate.toISOString();
-            similar = true;
+            nextTime = group.last_date.getTime() + (183 * DAY_TIME);
             break;
 
             // annual
             case 360: case 362: case 363: case 364: case 365: case 366: case 367: case 368: case 369:
             group.recurrence = "YEAR";
-            var nextTime = group.last_date.getTime() + (365 * DAY_TIME);
+            nextTime = group.last_date.getTime() + (365 * DAY_TIME);
+            break;
+        }
+        if (group.recurrence !== null) {
+            // txnDate matches one of the recurrence patterns
             var nextDate = new Date();
             nextDate.setTime(nextTime);
             group.next_date = nextDate.toISOString();
             similar = true;
-            break;
         }
     } else {
         // just need to check recurrence specified in group
@@ -161,16 +149,32 @@ const updateNextAmt = function(group, newAmt) {
 }
 
 /**
+ * Action: Calculates the date for one year ago
+ * Returns: Date object for one year ago
+ */
+const yearAgoToday = function() {
+    var today = new Date();
+    var yearAgoTime = today.getTime() - (365 * DAY_TIME);
+    return new Date(yearAgoTime);
+}
+
+/**
  * Parameters: 
  *          txns - The transactions to process before bulk insertion
  * Action: Populates the company name
  * Returns: validation errors
  */
-exports.preprocessTxns = function(txns) {
+exports.preprocessTxns = function(txns, authorizedUser) {
     if ((txns == null) || (txns.length === 0)) return {errors: "Empty transaction list"};
     // can do other preprocessing here, but remember model is responsible for validation in MVC
     for (var i = 0; i < txns.length; i++) {
         var txn = txns[i];
+        // make sure not trying to update a different user's transactions!
+        // check done in helper since model does not know who the authenticated user is
+        if (txn.user_id !== authorizedUser._id) {
+            err = {errors: "Forbidden!"};
+            break;
+        }
         txn.company = getCompany(txn.name);
         // the @meanie/mongoose-upsert-many documentation states schema validation is applied
         // but my testing says that it isn't... so I have to do it here
@@ -185,10 +189,11 @@ exports.preprocessTxns = function(txns) {
  * Parameters: 
  *          txns - The transactions to sort and determine the recurrence of
  * Action: Sorts the users transactions and determines if they are active and recurring.
- *         Note that the transactions will already be sorted by company, date(DESC), and amount
+ *         Note that the transactions will already be sorted by company and date(DESC)
  * Returns: Array of active, recurring transactions
  */
 exports.sortTxns = function(txns) {
+    const YEAR_AGO = yearAgoToday();
     var recurTxns = [];  // return value; array of active recurring transactions
     var currentCompany;
     var companyGroups = [];  // Potential recurring groups for the current company
@@ -240,8 +245,10 @@ exports.sortTxns = function(txns) {
                 }
                 break;
             }
-            // does not match existing group; create new
-            if (!found) {
+            // does not match existing group; create new group if txn date is not more than a year
+            // in the past (w/ 4 day grace period).  the largest recurrence pattern is one year
+            // so if the first txn is over a year old, the group will never be active
+            if ((!found) && (txn.date.getTime() >= (YEAR_AGO.getTime() - 4))) {
                 var newGroup = {
                     name: txn.name,
                     user_id: txn.user_id,

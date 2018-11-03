@@ -17,6 +17,8 @@ const loggedInUser = {
 // will start failing due to the passage of time.
 const DAY_TIME = 86400000;  // ms in a day
 let TODAY, WEEK_AGO, ONE_MONTH_AGO, TWO_MONTH_AGO, WEEK_FROM_NOW, MONTH_FROM_NOW;
+let TWO_WEEK_AGO, SIX_MONTH_AGO, ONE_YEAR_AGO, TWO_WEEK_FROM_NOW, SIX_MONTH_FROM_NOW;
+let YEAR_FROM_NOW;
 
 describe('Transactions Controller Unit Tests:', () => {
     before((done) => {
@@ -25,18 +27,36 @@ describe('Transactions Controller Unit Tests:', () => {
         
         var weekAgo = new Date(today.getTime() - (7 * DAY_TIME));
         WEEK_AGO = weekAgo.toISOString();
+
+        var twoWeekAgo = new Date(today.getTime() - (14 * DAY_TIME));
+        TWO_WEEK_AGO = twoWeekAgo.toISOString();
         
         var monthAgo = new Date(today.getTime() - (30 * DAY_TIME));
         ONE_MONTH_AGO = monthAgo.toISOString();
         
         var twoAgo = new Date(today.getTime() - (60 * DAY_TIME));
         TWO_MONTH_AGO = twoAgo.toISOString();
+
+        var sixMonthAgo = new Date(today.getTime() - (183 * DAY_TIME));
+        SIX_MONTH_AGO = sixMonthAgo.toISOString();
+
+        var yearAgo = new Date(today.getTime() - (365 * DAY_TIME));
+        ONE_YEAR_AGO = yearAgo.toISOString();
         
         var weekFromNow = new Date(today.getTime() + (7 * DAY_TIME));
         WEEK_FROM_NOW = weekFromNow.toISOString();
+
+        var twoWeekFromNow = new Date(today.getTime() + (14 * DAY_TIME));
+        TWO_WEEK_FROM_NOW = twoWeekFromNow.toISOString();
         
         var monthFromNow = new Date(today.getTime() + (30 * DAY_TIME));
         MONTH_FROM_NOW = monthFromNow.toISOString();
+
+        var sixMonthFromNow = new Date(today.getTime() + (183 * DAY_TIME));
+        SIX_MONTH_FROM_NOW = sixMonthFromNow.toISOString();
+
+        var yearFromNow = new Date(today.getTime() + (365 * DAY_TIME));
+        YEAR_FROM_NOW = yearFromNow.toISOString();        
 
         done();
     });
@@ -201,6 +221,70 @@ describe('Transactions Controller Unit Tests:', () => {
                 });
         });
 
+        it('Should return a group of recurring transactions for each recurrence pattern', (done) => {
+            request('http://localhost:1984').post('/')
+                .set('Accept', 'application/json')
+                .set('Content-Type', 'application/json')
+                .send([
+                    {
+                        "trans_id":"130",
+                        "user_id":loggedInUser._id,
+                        "name":"BIWK Txn",
+                        "amount":"100",
+                        "date":TWO_WEEK_AGO
+                    },
+                    {
+                        "trans_id":"131",
+                        "user_id":loggedInUser._id,
+                        "name":"BIWK Txn",
+                        "amount":"101",
+                        "date":TODAY
+                    },
+                    {
+                        "trans_id":"132",
+                        "user_id":loggedInUser._id,
+                        "name":"SEMI Txn",
+                        "amount":"100",
+                        "date":SIX_MONTH_AGO
+                    },
+                    {
+                        "trans_id":"133",
+                        "user_id":loggedInUser._id,
+                        "name":"SEMI Txn",
+                        "amount":"101",
+                        "date":TODAY
+                    },
+                    {
+                        "trans_id":"134",
+                        "user_id":loggedInUser._id,
+                        "name":"YEAR Txn",
+                        "amount":"100",
+                        "date":ONE_YEAR_AGO
+                    },
+                    {
+                        "trans_id":"135",
+                        "user_id":loggedInUser._id,
+                        "name":"YEAR Txn",
+                        "amount":"101",
+                        "date":TODAY
+                    }
+                ])
+                .expect('Content-Type', /json/)
+                .expect(200)
+                .end((err, res) => {
+                    if (err) return done(err);
+                    expect(res.body).to.be.a('array');
+                    expect(res.body).has.lengthOf(5);
+                    expect(res.body[2]).to.have.property('name').that.equals('BIWK Txn');
+                    expect(res.body[2]).to.have.property('next_date').that.equals(TWO_WEEK_FROM_NOW);
+                    expect(res.body[3]).to.have.property('name').that.equals('SEMI Txn');
+                    expect(res.body[3]).to.have.property('next_date').that.equals(SIX_MONTH_FROM_NOW);
+                    expect(res.body[4]).to.have.property('name').that.equals('YEAR Txn');
+                    expect(res.body[4]).to.have.property('next_date').that.equals(YEAR_FROM_NOW);
+                    done();
+                });
+        });
+
         it('Should return a status of 400 (empty request)', (done) => {
             request('http://localhost:1984').post('/')
                 .set('Accept', 'application/json')
@@ -217,7 +301,7 @@ describe('Transactions Controller Unit Tests:', () => {
                 .set('Content-Type', 'application/json')
                 .send([
                     {
-                        "trans_id":"125",
+                        "trans_id":"136",
                         "name":"Amazon 181015",
                         "amount":"12.99",
                         "date":TODAY
@@ -225,6 +309,27 @@ describe('Transactions Controller Unit Tests:', () => {
                 ])
                 .expect('Content-Type', /json/)
                 .expect(400, done);
+        });
+
+        it('Should return a status of 400 (user_id does not match authenticated user)', (done) => {
+            request('http://localhost:1984').post('/')
+                .set('Accept', 'application/json')
+                .set('Content-Type', 'application/json')
+                .send([
+                    {
+                        "trans_id":"137",
+                        "user_id":"notauthenticateduser",
+                        "name":"Amazon 181015",
+                        "amount":"12.99",
+                        "date":TODAY
+                    }
+                ])
+                .expect('Content-Type', /json/)
+                .expect(400)
+                .end((err, res) => {
+                    expect(res.body).to.have.property('errors').that.equals('Forbidden!');
+                    done();
+                });
         });
     });
 

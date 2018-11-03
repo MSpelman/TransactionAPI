@@ -12,7 +12,7 @@ exports.upsert = function(req, res, next) {
     var txns = req.body;
     var valErr;
 
-    valErr = txnHelper.preprocessTxns(txns);
+    valErr = txnHelper.preprocessTxns(txns, req.user);
     if (valErr) return res.status(400).send(valErr);
 
     Transaction.upsertMany(req.body, ['trans_id']).then((result) => {
@@ -31,7 +31,7 @@ exports.upsert = function(req, res, next) {
  */
 exports.recurring = function(req, res, next) {
     Transaction.find({user_id: req.user})
-    .sort('company -date amount')
+    .sort('company -date')
     .exec((err, txns) => {
         if (err) {
             return res.status(400).send(err);
